@@ -1,0 +1,333 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.octotelematics.otp</groupId>
+        <artifactId>main-parent</artifactId>
+        <version>1.0.4</version>
+    </parent>
+
+    <groupId>com.octotelematics.otp</groupId>
+    <artifactId>unicomp</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <java.version>17</java.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+
+        <quarkus-plugin.version>3.17.7</quarkus-plugin.version>
+        <surefire-plugin.version>3.1.2</surefire-plugin.version>
+        <maven.compiler.parameters>true</maven.compiler.parameters>
+        <commons-lang3.version>3.17.0</commons-lang3.version>
+        <jboss-logmanager.version>2.0.1.Final</jboss-logmanager.version>
+        <log4j2.version>2.24.3</log4j2.version>
+        <lombok.version>1.18.20</lombok.version>
+        <avro.version>1.11.3</avro.version> <!-- WAS 1.9.2 -->
+        <jacoco.version>0.8.8</jacoco.version>
+
+        <octo-quarkus-core.version>3.3.0-SNAPSHOT</octo-quarkus-core.version>
+        <octo-python-core.version>1.8.0-SNAPSHOT</octo-python-core.version>
+        <clex-decoder.version>1.2.12</clex-decoder.version>
+
+        <octo-data-model.version>1.2.135</octo-data-model.version>
+
+        <quarkus.container-image.build>false</quarkus.container-image.build>
+        <quarkus.container-image.push>false</quarkus.container-image.push>
+        <quarkus.container-image.registry>octocrstage.azurecr.io</quarkus.container-image.registry>
+        <quarkus.container-image.group>iot</quarkus.container-image.group>
+        <quarkus.container-image.name>universal-processor</quarkus.container-image.name>
+
+        <sphinx.deploy.enabled>true</sphinx.deploy.enabled>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-universe-bom</artifactId>
+                <version>${quarkus-plugin.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>2.24.3</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        
+        <dependency>
+            <groupId>com.octotelematics.otp</groupId>
+            <artifactId>universal-processor</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jdbc-postgresql</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- The most important plugins for Java 11 are the compiler plugin, surefire (for unit-tests) and failsafe (for integration-tests).-->
+        <plugins>
+            <plugin>
+                <groupId>org.jboss.jandex</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                <version>1.2.2</version>
+                <executions>
+                    <execution>
+                        <id>make-index</id>
+                        <goals>
+                            <goal>jandex</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-maven-plugin</artifactId>
+                <version>${quarkus-plugin.version}</version>
+                <extensions>true</extensions>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>build</goal>
+                            <goal>generate-code</goal>
+                            <goal>generate-code-tests</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!--
+             Usually, dependencies of an application (which is a Maven project) could be displayed using mvn dependency:tree command.
+             In case of a Quarkus application, however, this command will list only the runtime dependencies of the application.
+             Given that the Quarkus build process adds deployment dependencies of the extensions used in the application to the original application classpath,
+             it could be useful to know which dependencies and which versions end up on the build classpath.
+             Luckily, the quarkus-bootstrap Maven plugin includes the build-tree goal which displays the build dependency tree for the application.
+             ./mvn quarkus-bootstrap:build-tree
+            -->
+            <plugin>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-extension-maven-plugin</artifactId>
+                <version>${quarkus-plugin.version}</version>
+            </plugin>
+            <!-- For surefire and failsafe plugins we add an additional argument
+                illegal-access=permit to allow all reflection access for third party libraries:
+            -->
+            <!--
+               <quarkus.log.level>DEBUG</quarkus.log.level>
+                Enable debug logging for all logging categories.
+            -->
+            <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${surefire-plugin.version}</version>
+                <configuration>
+                    <systemPropertyVariables>
+                        <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+                        <quarkus.log.level>INFO</quarkus.log.level>
+                        <maven.home>${maven.home}</maven.home>
+                    </systemPropertyVariables>
+                    <!--
+                    <argLine>
+                     -illegal-access=permit
+                     </argLine>
+                 -->
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>2.22.0</version><!--
+              <configuration>
+                  <argLine>
+                       -illegal-access=permit
+                  </argLine>
+              </configuration>-->
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.0</version>
+                <configuration>
+
+                    <!--<release>${java.version}</release>-->
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <encoding>${project.build.sourceEncoding}</encoding>
+                    <!-- the parameters=true option is critical so that RESTEasy works fine -->
+                    <parameters>true</parameters>
+                    <!--
+                        We will need to do some mappings between the domain object to the entity object.
+                        For these purposes, we will add in MapStruct. First the actual dependency,
+                        then the compiler plugin will need to be enhanced with some configuration.
+                        Because the MapStruct generates code AND Lombok generates code,
+                        we need to have them both in the configuration to ensure they both do their jobs.
+                        Lombok needs to generate the getters/setters first, which will then be used in the Mapper generations.
+                        This is where the Lombok version property comes in.
+                    -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                        <!--
+                        <path>
+                            <groupId>org.mapstruct</groupId>
+                            <artifactId>mapstruct-processor</artifactId>
+                            <version>${mapstruct.version}</version>
+                        </path>
+                        -->
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.0.2</version>
+                <configuration>
+                    <encoding>${project.build.sourceEncoding}</encoding>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- This plugin helps finding the latest plugin or dependency versions for your modules.
+                     Open up the terminal and execute this command to find the plugin versions you have to update:
+                    mvn versions:display-plugin-updates
+                -->
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>versions-maven-plugin</artifactId>
+                <version>2.5</version>
+                <configuration>
+                    <generateBackupPoms>false</generateBackupPoms>
+                </configuration>
+            </plugin>
+            <!-- This plugin enables test code coverage analysis -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>default-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                        <configuration>
+                            <exclClassLoaders>*QuarkusClassLoader</exclClassLoaders>
+                            <destFile>${project.build.directory}/jacoco-quarkus.exec</destFile>
+                            <append>true</append>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.0.0</version>
+                <executions>
+                    <execution>
+                        <id>shaded-package-cleanup</id>
+                        <phase>package</phase>
+                        <configuration>
+                            <target>
+                                <property
+                                    name="jar.name"
+                                    value="${project.build.directory}/${project.build.finalName}.${project.packaging}"
+                                />
+
+                                <jar destfile="${jar.name}-new">
+                                    <zipfileset
+                                        src="${jar.name}"
+                                        excludesfile="${basedir}/src/main/resources/jar-exclusions.lst"
+                                    />
+                                </jar>
+
+                                <move file="${jar.name}" tofile="${jar.name}-original" />
+                                <move file="${jar.name}-new" tofile="${jar.name}" />
+                            </target>
+                        </configuration>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+
+    </build>
+
+    <profiles>
+        <profile>
+            <id>standalone-build</id>
+            <properties>
+                <quarkus.package.type>uber-jar</quarkus.package.type>
+            </properties>
+        </profile>
+        <profile>
+            <id>image-build</id>
+            <activation>
+                <property>
+                    <name>image</name>
+                </property>
+            </activation>
+            <properties>
+                <quarkus.container-image.build>true</quarkus.container-image.build>
+            </properties>
+        </profile>
+        <profile>
+            <id>image-push</id>
+            <activation>
+                <property>
+                    <name>push</name>
+                </property>
+            </activation>
+            <properties>
+                <quarkus.container-image.push>true</quarkus.container-image.push>
+                <quarkus.container-image.build>true</quarkus.container-image.build>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.0.0</version>
+                        <executions>
+                            <execution>
+                                <id>image-init</id>
+                                <phase>validate</phase>
+                                <configuration>
+                                    <target if="azure.init">
+                                        <exec taskName="azure" executable="${azure.init}"/>
+                                    </target>
+                                </configuration>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+</project>

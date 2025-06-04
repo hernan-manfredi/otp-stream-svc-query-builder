@@ -1,0 +1,2 @@
+com.octotelematics.otp.core.encryption.EncryptionInterceptor
+com.octotelematics.otp.core.configuration.VariableInterceptor

@@ -1,0 +1,257 @@
+image:
+  name: octocrstage.azurecr.io/iot/universal-processor
+  tag: 1.0.0-SNAPSHOT
+  pullSecrets:
+    - name: octocrstage
+
+replicaCount: 1
+
+resources:
+  limits:
+    memory: 1024M
+  requests:
+    cpu: 1
+    memory: 512M
+
+application: |-
+  mp:
+    messaging:
+      incoming:
+        message-source-1:
+          enabled: true
+          topics: message.raw.clex.platform,message.raw.clex.platform.short,message.raw.clex.platform.connection
+          bootstrap:
+            servers: kafkadev01.omooveplatform.it:9091,kafkadev01.omooveplatform.it:9092,kafkadev02.omooveplatform.it:9092
+          group:
+            id: universal-processor-uat-clex-packet
+          partitions: 1
+          auto:
+            offset:
+              reset: latest
+            commit:
+              interval:
+                ms: 15000
+          # https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#consumer-configurations-only
+          max:
+            poll:
+              records: 10
+              interval:
+                ms: 40000
+          heartbeat:
+            interval:
+              ms: 3000
+          session:
+            timeout:
+              ms: 30000
+        message-source-2:
+          enabled: false
+          topics: not-used
+          bootstrap:
+            servers: not-used
+          group:
+            id: not-used
+          partitions: 3
+          auto:
+            offset:
+              reset: latest
+            commit:
+              interval:
+                ms: 15000
+          # https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#consumer-configurations-only
+          max:
+            poll:
+              records: 10
+              interval:
+                ms: 40000
+          heartbeat:
+            interval:
+              ms: 3000
+          session:
+            timeout:
+              ms: 30000
+        packet-source:
+          enabled: true
+          topics: avro.raw.clex.dat
+          bootstrap:
+            servers: eu-uat-kafka-telematic.octobuild.net:9092
+          group:
+            id: universal-processor-uat-clex-ngp
+          partitions: 1
+          auto:
+            offset:
+              reset: latest
+            commit:
+              interval:
+                ms: 15000
+          # https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#consumer-configurations-only
+          max:
+            poll:
+              records: 10
+              interval:
+                ms: 40000
+          heartbeat:
+            interval:
+              ms: 3000
+          session:
+            timeout:
+              ms: 30000
+      outgoing:
+        message-output-1:
+          bootstrap:
+            servers: eu-uat-kafka-telematic.octobuild.net:9092
+        message-output-2:
+          bootstrap:
+            servers: eu-uat-kafka-telematic.octobuild.net:9092
+        message-output-3:
+          bootstrap:
+            servers: eu-uat-kafka-telematic.octobuild.net:9092
+        packet-output:
+          bootstrap:
+            servers: eu-uat-kafka-telematic.octobuild.net:9092
+  
+  quarkus:
+    log:
+      category:
+        "com.octotelematics.otp.preprocessor":
+          level: DEBUG
+        "com.octotelematics.otp.preprocessor.messaging":
+          level: DEBUG
+        "com.octotelematics.otp.core":
+          level: INFO
+        "com.octotelematics.otp.core.configuration.VariableInterceptor":
+          level: INFO
+        "com.octotelematics.otp.core.services.BaseContractEnrichmentResource":
+          level: DEBUG
+        "com.octotelematics.otp.core.services.util.ServiceClientRequestLogger":
+          level: DEBUG
+        "com.octotelematics.otp.core.services.util.ServiceClientAnnotationsLogger":
+          level: DEBUG
+        "com.octotelematics.otp.core.services.util.ServiceResponseExceptionMapper":
+          level: DEBUG
+        "com.octotelematics.otp.core.messaging.MessageHandler":
+          level: DEBUG
+        "com.octotelematics.otp.core.messaging.MessagePacketHandler":
+          level: DEBUG
+    cache:
+      caffeine:
+        contract-enrichment-info:
+          expire-after-write: 30M
+  
+  com:
+    octotelematics:
+      otp:
+        core:
+          services:
+            SubscriptionService/mp-rest/url: http://configuration-central-uat.eu-i1-uat-configuration.svc.cluster.local:8080
+            SubscriptionService/byDevice/Retry/maxRetries: 2
+            SubscriptionService/byDevice/Retry/delay: 500
+            SubscriptionService/byDevice/Timeout: 20000
+        routing:
+          selectors:
+            - name: message-source-1-filter
+              default: ignore
+              routes:
+                - name: activation-accept
+                  destination: pass
+                  events:
+                    - CLEX:3:1
+                    - CLEX:50:1
+                    - CLEX:50:7
+                    - CLEX:50:15
+                  rules:
+                    - RCX
+                - name: activation-discard
+                  destination: ignore
+                  events:
+                    - CLEX:3:1
+                    - CLEX:50:1
+                    - CLEX:50:7
+                    - CLEX:50:15
+                  rules:
+                    - CX
+                    - EVM
+                - name: ama-accept
+                  destination: pass
+                  rules:
+                    - PCK:CX-PCK-1146
+                    - PCK:CX-PCK-1147
+                - name: nebula-accept
+                  destination: pass
+                  events:
+                    - CLEX:50:140
+                    - CLEX:50:143
+                    - CLEX:50:144
+                    - CLEX:50:146
+                    - CLEX:50:150
+                    - CLEX:50:153
+                    - CLEX:50:154
+                    - CLEX:50:156
+                    - CLEX:50:157
+                    - CLEX:50:160
+                    - CLEX:50:163
+                    - CLEX:50:171
+                    - CLEX:50:181
+                    - CLEX:50:183
+                    - CLEX:50:184
+                    - CLEX:50:186
+                    - CLEX:50:187
+                    - CLEX:50:190
+                - name: clex-fend
+                  destination: pass
+                  rules:
+                    - NGP
+            - name: message-source-2-filter
+            - name: packet-source-filter
+              default: ignore
+              routes:
+                - name: clex-filter-refresh
+                  destination: refresh,enrich
+                  events:
+                    - CLEX:50:1
+                    - CLEX:50:3
+                - name: clex-filter
+                  destination: enrich
+                  events:
+                    - CLEX
+            - name: message-output-1-selector
+              attributes:
+                "transport.application-id": universal-processor-uat-clex-ngp
+            - name: message-output-2-selector
+              attributes:
+                "transport.application-id": universal-processor-uat-clex-ngp
+            - name: message-output-3-selector
+              attributes:
+                "transport.application-id": universal-processor-uat-clex-ngp
+            - name: packet-output-selector
+              attributes:
+                "transport.application-id": universal-processor-uat-clex-ngp
+              default: avro.raw.clex
+              routes:
+                - name: discard-out
+                  destination: avro.raw.clex.discard
+                  rules:
+                    - DISCARD
+                - name: unknown-out
+                  destination: avro.raw.clex.unknown
+                  rules:
+                    - UNK
+                - name: privacy-out
+                  destination: avro.raw.clex.privacy
+                  rules:
+                    - PVC/TELEMATIC
+                    - PVC/RAWDATA
+                    - PVC/FULL
+                    - ^PVC/FREEZE/
+                - name: recover-out
+                  destination: avro.raw.clex
+                  rules:
+                    - REVR
+                    - RECV
+                - name: park-out
+                  destination: avro.raw.clex.park
+                  rules:
+                    - PARK
+                - name: device-mgmt
+                  destination: avro.raw.clex.dm
+                  events:
+                    - CLEX:50

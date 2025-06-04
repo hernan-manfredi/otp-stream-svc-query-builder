@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "project.fullname" . }}
+  labels:
+{{ include "project.labels" . | indent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "project.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "project.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.hosts }}
+      hostAliases: {{ toYaml .Values.hosts | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          {{- if .Values.resources }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.name }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["java"]
+          args: [
+            "-Xmx350m",
+            "-Dcom.sun.management.jmxremote",
+            "-Dcom.sun.management.jmxremote.authenticate=false",
+            "-Dcom.sun.management.jmxremote.ssl=false",
+            "-Dcom.sun.management.jmxremote.local.only=false",
+            "-Dcom.sun.management.jmxremote.port=9999",
+            "-Dcom.sun.management.jmxremote.rmi.port=9999",
+            "-Djava.rmi.server.hostname=127.0.0.1",
+            "-jar",
+            "quarkus-run.jar"
+          ]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: jmx
+              containerPort: 9999
+              protocol: TCP
+          volumeMounts:
+          - name: config-files
+            mountPath: "/home/jboss/config"
+            readOnly: true
+          livenessProbe:
+            timeoutSeconds: 3
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            failureThreshold: 3
+            httpGet:
+              path: /q/health
+              port: 8080
+          env:
+            - name: METADATA_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+      volumes:
+        - name: config-files
+          configMap:
+            name: {{ include "project.fullname" . }}-config
+                    
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+    {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}

@@ -1,0 +1,204 @@
+mp:
+  messaging:
+    incoming:
+      message-source-1:
+        enabled: true
+        topics: message.in
+        bootstrap:
+          servers: localhost:9092
+        group:
+          id: universal-processor-dev
+        partitions: 1
+        auto:
+          offset:
+            reset: earliest
+      message-source-2:
+        enabled: false
+        topics: not-used
+        bootstrap:
+          servers: localhost:9092
+        group:
+          id: universal-processor-dev
+        auto:
+          offset:
+            reset: latest
+      packet-source:
+        enabled: false
+        topics: not-used
+        bootstrap:
+          servers: localhost:9092
+        group:
+          id: universal-processor-dev
+        auto:
+          offset:
+            reset: latest
+    outgoing:
+      message-output-1:
+        bootstrap:
+          servers: localhost:9092
+      message-output-2:
+        bootstrap:
+          servers: localhost:9092
+      message-output-3:
+        bootstrap:
+          servers: localhost:9092
+      packet-output:
+        bootstrap:
+          servers: localhost:9092
+
+quarkus:
+  log:
+    level: INFO
+    category:
+      "com.octotelematics.otp.processing":
+        level: DEBUG
+      "com.octotelematics.otp.core":
+        level: INFO
+      "com.octotelematics.routing":
+        level: INFO
+      "com.octotelematics.otp.core.services.util.ServiceClientRequestLogger":
+        level: DEBUG
+
+  datasource:
+    tdm:
+      db-kind: postgresql
+      jdbc:
+        url: jdbc:postgresql://eu-uat-postgres.octotelematics.net:5432/eu-otptdm-uat-fw
+      username: eu-otp-uat
+      password: '{otp:255764076eaa25d64917c0a30690d6ce}'
+
+
+com:
+  octotelematics:
+    otp:
+
+      core:
+        services:
+          #ImageManagerService/mp-rest/url: http://localhost:8082/image
+          ImageManagerService/mp-rest/url: http://image-manager.k8s-sit.octosl.com/image
+
+      routing:
+        selectors:
+          - name: message-source-1-filter
+            default: pass
+            routes:
+              - name: trip-chunk-processor-example
+                destination: pass
+                features:
+                  - process/TripProcessor
+                  - process/TripProcessor2
+                events:
+                  - EVT:TRIP
+                  - EVT:ACTUATION
+              - name: crash-chunk-processor-example
+                destination: pass
+                features:
+                  - process/CrashProcessor
+                events:
+                  - EVT:CRASH
+          - name: message-source-2-filter
+          - name: packet-source-filter
+          - name: message-output-1-selector
+            default: message.out.default
+            routes:
+              - name: proc1-out
+                destination: message.out.proc1
+                rules:
+                  - PROC1
+              - name: proc2-out
+                destination: message.out.proc2
+                rules:
+                  - PROC2
+          - name: message-output-2-selector
+          - name: message-output-3-selector
+          - name: packet-output-selector
+
+      processor:
+        runtime:
+          startup:
+            - EnvironmentInitialization 
+
+        processors:
+          - name: TripProcessor
+            signature: event
+            code: |-
+              event = model.Event().withType( "TEST" ).withDescription( Input )
+              #event.context("PROVA").setString("ALMANACCO")
+              event.deviceId = "MANGO"
+              event.addTags("PROC1")
+              return [ Input, event ]
+
+          - name: TripProcessor2
+            signature: event
+            code: |-
+              #logging.info( "/%s Event: %s", Input.device(), Input )
+              printEvent( "Event passed", Input )
+
+              print "Datasources"
+              print Data
+
+              Input.addTags("PROC2")
+
+          - name: CrashProcessor
+            signature: event
+            image: 'obd:processing:missing-pid'
+
+          - name: EnvironmentInitialization
+            resource: /scripts/env.py
+
+#quarkus:
+#  http:
+#    port: 8080
+#  datasource:
+#    db:
+#      jdbc:
+#        url: jdbc:postgresql://localhost:5432/device_db
+#      username: device_user
+#      password: device_pass
+#      max-size: 20
+#  hibernate-orm:
+#    database:
+#      generation: update
+#    packages:
+#      scan:
+#        - "com.example.device.models"
+#  resteasy:
+#    path: /api
+#
+#com:
+#  example:
+#    device:
+#      service:
+#        base-path: /platform/{platform}/device/{device}
+#        cache:
+#          enabled: true
+#          ttl: 300s
+#
+#app:
+#  endpoints:
+#    device:
+#      path: /platform/{platform}/device/{device}
+#      methods:
+#        - method: GET
+#          description: Get device details by platform and device ID
+#          produces: application/json
+#          parameters:
+#            - name: platform
+#              in: path
+#              required: true
+#              schema:
+#                type: string
+#            - name: device
+#              in: path
+#              required: true
+#              schema:
+#                type: string
+#          responses:
+#            200:
+#              description: Device found
+#              content:
+#                application/json:
+#                  schema:
+#                    $ref: '#/components/schemas/Device'
+#            404:
+#              description: Device not found

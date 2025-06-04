@@ -1,0 +1,253 @@
+image:
+  name: octocrstage.azurecr.io/iot/universal-processor
+  tag: 1.0.0-SNAPSHOT
+  pullSecrets:
+    - name: octocrstage
+
+replicaCount: 1
+
+resources:
+  limits:
+    memory: 1024M
+  requests:
+    cpu: 1
+    memory: 512M
+
+application: |-
+  mp:
+    messaging:
+      incoming:
+        message-source-1:
+          enabled: true
+          topics: message.raw.clex
+          bootstrap:
+            servers: eu-uat-kafka-telematic.octobuild.net:9092
+          group:
+            id: universal-processor-sit-clex-uat
+          partitions: 1
+          auto:
+            offset:
+              reset: latest
+            commit:
+              interval:
+                ms: 15000
+          # https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#consumer-configurations-only
+          max:
+            poll:
+              records: 10
+              interval:
+                ms: 40000
+          heartbeat:
+            interval:
+              ms: 3000
+          session:
+            timeout:
+              ms: 30000
+        message-source-2:
+          enabled: true
+          topics: message.raw.clex
+          bootstrap:
+            servers: 10.34.32.73:9091,10.34.32.73:9092,10.34.32.74:9092
+          group:
+            id: universal-processor-sit-clex-uat
+          partitions: 1
+          auto:
+            offset:
+              reset: latest
+            commit:
+              interval:
+                ms: 15000
+          # https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#consumer-configurations-only
+          max:
+            poll:
+              records: 10
+              interval:
+                ms: 40000
+          heartbeat:
+            interval:
+              ms: 3000
+          session:
+            timeout:
+              ms: 30000
+        packet-source:
+          enabled: true
+          topics: avro.raw.clex.dat,avro.raw.clex.fend
+          bootstrap:
+            servers: eu-uat-kafka-telematic.octobuild.net:9092
+          group:
+            id: universal-processor-sit-clex-uat
+          partitions: 1
+          auto:
+            offset:
+              reset: latest
+            commit:
+              interval:
+                ms: 15000
+          # https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#consumer-configurations-only
+          max:
+            poll:
+              records: 10
+              interval:
+                ms: 40000
+          heartbeat:
+            interval:
+              ms: 3000
+          session:
+            timeout:
+              ms: 30000
+      outgoing:
+        message-output-1:
+          bootstrap:
+            servers: eu-sit-kafka-mi01.octosl.com:9092
+        message-output-2:
+          bootstrap:
+            servers: eu-sit-kafka-mi01.octosl.com:9092
+        message-output-3:
+          bootstrap:
+            servers: eu-sit-kafka-mi01.octosl.com:9092
+        packet-output:
+          bootstrap:
+            servers: eu-sit-kafka-mi01.octosl.com:9092
+  
+  quarkus:
+    log:
+      category:
+        "com.octotelematics.otp.preprocessor":
+          level: DEBUG
+        "com.octotelematics.otp.preprocessor.messaging":
+          level: DEBUG
+        "com.octotelematics.otp.core":
+          level: DEBUG
+        "com.octotelematics.otp.core.configuration.VariableInterceptor":
+          level: DEBUG
+        "com.octotelematics.otp.core.services.BaseContractEnrichmentResource":
+          level: DEBUG
+        "com.octotelematics.otp.core.services.util.ServiceClientRequestLogger":
+          level: DEBUG
+        "com.octotelematics.otp.core.services.util.ServiceClientAnnotationsLogger":
+          level: DEBUG
+        "com.octotelematics.otp.core.services.util.ServiceResponseExceptionMapper":
+          level: DEBUG
+        "com.octotelematics.otp.core.messaging.MessageHandler":
+          level: DEBUG
+        "com.octotelematics.otp.core.messaging.MessagePacketHandler":
+          level: DEBUG
+    cache:
+      caffeine:
+        contract-enrichment-info:
+          maximum-size: 1000
+          expire-after-write: 30M
+  
+  com:
+    octotelematics:
+      otp:
+        core:
+          services:
+            SubscriptionService/mp-rest/url: http://configuration-central-sit.eu-i1-sit-configuration.svc.cluster.local:8080
+            SubscriptionService/byDevice/Retry/maxRetries: 2
+            SubscriptionService/byDevice/Retry/delay: 500
+            SubscriptionService/byDevice/Timeout: 20000
+        routing:
+          selectors:
+            - name: message-source-1-filter
+              routes:
+                - name: clex-filter-refresh
+                  destination: enrich,refresh
+                  events:
+                    - CLEX:50:1
+                    - CLEX:50:3
+                - name: clex-filter
+                  destination: enrich
+                  events:
+                    - CLEX
+            - name: message-source-2-filter
+              routes:
+                - name: clex-filter-refresh
+                  destination: enrich,refresh
+                  events:
+                    - CLEX:50:1
+                    - CLEX:50:3
+                - name: clex-filter
+                  destination: enrich
+                  events:
+                    - CLEX
+            - name: packet-source-filter
+              routes:
+                - name: clex-filter
+                  destination: enrich
+                  events:
+                    - CLEX
+            - name: message-output-1-selector
+              attributes:
+                "transport.application-id": universal-processor-sit-clex-uat
+              routes:
+                - name: discard-out
+                  destination: message.raw.clex.discard
+                  events:
+                    - CLEX
+                  rules:
+                    - DISCARD
+                - name: unknown-out
+                  destination: message.raw.clex.unknown
+                  events:
+                    - CLEX
+                  rules:
+                    - UNK
+                - name: privacy-out
+                  destination: message.raw.clex.privacy
+                  events:
+                    - CLEX
+                  rules:
+                    - PVC/TELEMATIC
+                    - PVC/RAWDATA
+                    - PVC/FULL
+                    - ^PVC/FREEZE/
+                - name: recover-out
+                  destination: message.raw.clex.platform
+                  events:
+                    - CLEX
+                  rules:
+                    - REVR
+                    - RECV
+                - name: park-out
+                  destination: message.raw.clex.park
+                  events:
+                    - CLEX
+                  rules:
+                    - PARK
+                - name: clex-connection-out
+                  destination: message.raw.clex.platform.connection
+                  events:
+                    - CLEX:4
+                - name: clex-out
+                  destination: message.raw.clex.platform
+                  events:
+                    - CLEX:113
+                - name: clex-out
+                  destination: message.raw.clex.platform.short
+                  events:
+                    - CLEX
+            - name: message-output-2-selector
+              attributes:
+                "transport.application-id": universal-processor-sit-clex-uat
+              routes:
+                - name: sharing-out
+                  destination: message.raw.clex.sharing
+                  events:
+                    - CLEX
+                  rules:
+                    - OSMP
+            - name: message-output-3-selector
+              attributes:
+                "transport.application-id": universal-processor-sit-clex-uat
+            - name: packet-output-selector
+              attributes:
+                "transport.application-id": universal-processor-sit-clex-uat
+
+hosts:
+  - ip: 10.34.32.73
+    hostnames:
+      - "kafkadev01.omooveplatform.it"
+  - ip: 10.34.32.74
+    hostnames:
+      - "kafkadev02.omooveplatform.it"

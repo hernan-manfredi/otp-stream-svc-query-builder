@@ -1,0 +1,202 @@
+mp:
+  openapi:
+    extensions:
+      smallrye:
+        operationIdStrategy: METHOD
+  # https://quarkus.io/guides/kafka#kafka-configuration
+  messaging:
+    incoming:
+      message-source-1:
+        enabled: false
+        connector: smallrye-kafka
+        topics: no-topic-defined
+        value:
+          deserializer: com.octotelematics.otp.core.messaging.EnvelopeSerializer
+        group:
+          id: universal-processor-dev
+        partitions: 3
+        enable:
+          auto:
+            commit: true
+        auto:
+          offset:
+            reset: latest
+          commit:
+            interval:
+              ms: 15000
+        # https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#consumer-configurations-only
+        max:
+          poll:
+            records: 10
+            interval:
+              ms: 40000
+        heartbeat:
+          interval:
+            ms: 3000
+        session:
+          timeout:
+            ms: 30000
+      message-source-2:
+        enabled: false
+        connector: smallrye-kafka
+        topics: no-topic-defined
+        value:
+          deserializer: com.octotelematics.otp.core.messaging.EnvelopeSerializer
+        group:
+          id: universal-processor-dev
+        partitions: 3
+        enable:
+          auto:
+            commit: true
+        auto:
+          offset:
+            reset: latest
+          commit:
+            interval:
+              ms: 15000
+        # https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#consumer-configurations-only
+        max:
+          poll:
+            records: 10
+            interval:
+              ms: 40000
+        heartbeat:
+          interval:
+            ms: 3000
+        session:
+          timeout:
+            ms: 30000
+      packet-source:
+        enabled: false
+        connector: smallrye-kafka
+        topics: no-topic-defined
+        value:
+          deserializer: com.octotelematics.serialization.transport.InputPacketSerializer
+        group:
+          id: universal-processor-dev
+        partitions: 3
+        enable:
+          auto:
+            commit: true
+        auto:
+          offset:
+            reset: latest
+          commit:
+            interval:
+              ms: 15000
+        # https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#consumer-configurations-only
+        max:
+          poll:
+            records: 10
+            interval:
+              ms: 40000
+        heartbeat:
+          interval:
+            ms: 3000
+        session:
+          timeout:
+            ms: 30000
+    outgoing:
+      message-output-1:
+        connector: smallrye-kafka
+        value:
+          serializer: com.octotelematics.otp.core.messaging.EnvelopeSerializer
+        partitioner:
+          class: com.octotelematics.serialization.transport.NumericDevicePartitioner
+      message-output-2:
+        connector: smallrye-kafka
+        value:
+          serializer: com.octotelematics.otp.core.messaging.EnvelopeSerializer
+        partitioner:
+          class: com.octotelematics.serialization.transport.NumericDevicePartitioner
+      message-output-3:
+        connector: smallrye-kafka
+        value:
+          serializer: com.octotelematics.otp.core.messaging.EnvelopeSerializer
+        partitioner:
+          class: com.octotelematics.serialization.transport.NumericDevicePartitioner
+      packet-output:
+        connector: smallrye-kafka
+        value:
+          serializer: com.octotelematics.otp.core.messaging.InputPacketSerializer
+        partitioner:
+          class: com.octotelematics.otp.core.messaging.InputPacketPartitioner
+
+# https://quarkus.io/guides/all-config
+quarkus:
+
+  devservices:
+    enabled: false
+
+  jib:
+    base-jvm-image: octocrstage.azurecr.io/quarkus-enhanced-base-image:1.0.0
+    jvm-arguments: -Xmx350m,-Dcom.sun.management.jmxremote,-Dcom.sun.management.jmxremote.authenticate=false,-Dcom.sun.management.jmxremote.ssl=false,-Dcom.sun.management.jmxremote.local.only=false,-Dcom.sun.management.jmxremote.port=9999,-Dcom.sun.management.jmxremote.rmi.port=9999,-Djava.rmi.server.hostname=127.0.0.1
+
+  smallrye-openapi:
+    info-title: Universal Processor
+    info-description: Generic processor for applying custom processing logic on messages
+
+  # https://quarkus.io/guides/openapi-swaggerui#configuration-reference:
+  swagger-ui:
+    always-include: true
+
+  # https://quarkus.io/guides/logging#loggingConfigurationReference
+  log:
+    min-level: TRACE
+    level: INFO
+    console:
+      format: "%d{yyy-MM-dd HH:mm:ss.SSS} %-5p [%c{3.}] (%t) %s%e%n"
+
+  # https://quarkus.io/guides/cdi-reference
+  index-dependency:
+    data-model:
+      group-id: com.octotelematics.otp.dm
+      artifact-id: contract-data
+    octo-commons:
+      group-id: com.octotelematics.otp
+      artifact-id: octo-commons
+
+  # https://quarkus.io/guides/micrometer#configuration-reference
+  micrometer:
+    enabled: true
+    binder:
+      kafka:
+        enabled: true
+
+  # https://quarkus.io/guides/all-config#quarkus-vertx_quarkus-vertx-eclipse-vert.x
+  vertx:
+    max-event-loop-execute-time: 5S
+
+  datasource:
+    metrics:
+      enabled: true
+
+com:
+  octotelematics:
+    otp:
+      serialization:
+        group-id: "otp-base"
+        application-id: "universal-processor-base"
+      routing:
+        selectors:
+          - name: message-source-1-filter
+            attributes:
+              "transport.tenant-id": universal-processor-base
+          - name: message-source-2-filter
+            attributes:
+              "transport.tenant-id": universal-processor-base
+          - name: packet-source-filter
+            attributes:
+              "transport.tenant-id": universal-processor-base
+          - name: message-output-1-selector
+            attributes:
+              "transport.tenant-id": universal-processor-base
+          - name: message-output-2-selector
+            attributes:
+              "transport.tenant-id": universal-processor-base
+          - name: message-output-3-selector
+            attributes:
+              "transport.tenant-id": universal-processor-base
+          - name: packet-output-selector
+            attributes:
+              "transport.tenant-id": universal-processor-base

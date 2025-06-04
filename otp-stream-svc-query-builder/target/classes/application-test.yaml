@@ -1,0 +1,107 @@
+mp:
+  messaging:
+    incoming:
+      message-source-1:
+        enabled: true
+        connector: smallrye-in-memory
+      message-source-2:
+        enabled: true
+        connector: smallrye-in-memory
+      packet-source:
+        enabled: true
+        connector: smallrye-in-memory
+    outgoing:
+      message-output-1:
+        enabled: true
+        connector: smallrye-in-memory
+      message-output-2:
+        enabled: true
+        connector: smallrye-in-memory
+      message-output-3:
+        enabled: true
+        connector: smallrye-in-memory
+      packet-output:
+        enabled: true
+        connector: smallrye-in-memory
+
+com:
+  octotelematics:
+    otp:
+      routing:
+        selectors:
+          - name: message-source-1-filter
+            routes:
+              - name: clex-pass-filter
+                destination: pass
+                events:
+                  - CLEX:50:1
+              - name: clex-discard-filter
+                destination: ignore
+                events:
+                  - CLEX:50:10
+              - name: clex-enrich-filter
+                destination: enrich
+                events:
+                  - CLEX
+          - name: message-source-2-filter
+            routes:
+              - name: clex-message-filter
+                destination: enrich
+                events:
+                  - CLEX
+          - name: packet-source-filter
+            routes:
+              - name: clex-packet-filter
+                destination: enrich
+                events:
+                  - CLEX
+          - name: message-output-1-selector
+            routes:
+              - name: platform-message-out
+                destination: message.raw.clex.platform
+                events:
+                  - CLEX
+                rules:
+                  - NGP
+          - name: message-output-2-selector
+            routes:
+              - name: legacy-message-out
+                destination: message.raw.clex.legacy
+                events:
+                  - CLEX
+                rules:
+                  - CX
+          - name: message-output-3-selector
+            default: message.raw.discarded
+          - name: packet-output-selector
+            routes:
+              - name: clex-packet-out
+                destination: avro.raw.clex.platform
+                events:
+                  - CLEX
+                rules:
+                  - CX
+
+quarkus:
+  jacoco:
+    title: universal-processor
+  log:
+    level: INFO
+    console:
+      format: "%d{yyy-MM-dd HH:mm:ss.SSS} %-5p [%c{3.}] (%t) %s%e%n"
+    # https://quarkus.io/guides/logging#quarkus-log-logging-log-config_quarkus.log.file-file-logging
+    category:
+      "com.octotelematics.otp.processor":
+        level: TRACE
+      "com.octotelematics.otp.core.messaging":
+        level: DEBUG
+      "com.octotelematics.otp.core.services":
+        level: DEBUG
+#      "com.octotelematics.otp.core.services.util.ServiceClientRequestLogger":
+#        level: DEBUG
+      "com.octotelematics.serialization":
+        level: ERROR
+      "com.octotelematics.otp.serialization":
+        level: ERROR
+      "io.smallrye.reactive.messaging.kafka":
+        level: WARN

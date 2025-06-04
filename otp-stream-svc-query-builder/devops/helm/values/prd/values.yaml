@@ -1,0 +1,248 @@
+image:
+  name: octocr.azurecr.io/iot/universal-processor
+  tag: 1.0.0-SNAPSHOT
+  pullSecrets:
+    - name: octocr
+
+replicaCount: 2
+
+resources:
+  limits:
+    memory: 1024M
+  requests:
+    cpu: 1
+    memory: 512M
+
+application: |-
+  mp:
+    messaging:
+      incoming:
+        message-source-1:
+          enabled: true
+          topics: message.raw.clex
+          bootstrap:
+            servers: 10.14.32.67:9092,10.14.32.68:9092,10.14.32.69:9092,10.14.32.82:9092,10.14.32.83:9092
+          group:
+            id: universal-processor-prd-clex-message
+          partitions: 1
+          auto:
+            offset:
+              reset: latest
+            commit:
+              interval:
+                ms: 30000
+          # https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#consumer-configurations-only
+          max:
+            poll:
+              records: 10
+              interval:
+                ms: 40000
+          heartbeat:
+            interval:
+              ms: 3000
+          session:
+            timeout:
+              ms: 30000
+        message-source-2:
+          enabled: false
+          topics: not-used
+          bootstrap:
+            servers: not-used
+          group:
+            id: not-used
+          partitions: 1
+          auto:
+            offset:
+              reset: latest
+            commit:
+              interval:
+                ms: 30000
+          # https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#consumer-configurations-only
+          max:
+            poll:
+              records: 10
+              interval:
+                ms: 40000
+          heartbeat:
+            interval:
+              ms: 3000
+          session:
+            timeout:
+              ms: 30000
+        packet-source:
+          enabled: true
+          topics: avro.raw.clex.dat,avro.raw.clex.fend
+          bootstrap:
+            servers: hdp-prod-aio-mi01.octosl.com:6667,hdp-prod-aio-mi02.octosl.com:6667,hdp-prod-aio-mi03.octosl.com:6667,hdp-prod-aio-mi04.octosl.com:6667,hdp-prod-aio-mi05.octosl.com:6667
+          group:
+            id: universal-processor-prd-clex-message
+          partitions: 1
+          auto:
+            offset:
+              reset: latest
+            commit:
+              interval:
+                ms: 30000
+          # https://learn.microsoft.com/en-us/azure/event-hubs/apache-kafka-configurations#consumer-configurations-only
+          max:
+            poll:
+              records: 10
+              interval:
+                ms: 40000
+          heartbeat:
+            interval:
+              ms: 3000
+          session:
+            timeout:
+              ms: 30000
+      outgoing:
+        message-output-1:
+          bootstrap:
+            servers: hdp-prod-aio-mi01.octosl.com:6667,hdp-prod-aio-mi02.octosl.com:6667,hdp-prod-aio-mi03.octosl.com:6667,hdp-prod-aio-mi04.octosl.com:6667,hdp-prod-aio-mi05.octosl.com:6667
+        message-output-2:
+          bootstrap:
+            servers: hdp-prod-aio-mi01.octosl.com:6667,hdp-prod-aio-mi02.octosl.com:6667,hdp-prod-aio-mi03.octosl.com:6667,hdp-prod-aio-mi04.octosl.com:6667,hdp-prod-aio-mi05.octosl.com:6667
+        message-output-3:
+          bootstrap:
+            servers: hdp-prod-aio-mi01.octosl.com:6667,hdp-prod-aio-mi02.octosl.com:6667,hdp-prod-aio-mi03.octosl.com:6667,hdp-prod-aio-mi04.octosl.com:6667,hdp-prod-aio-mi05.octosl.com:6667
+        packet-output:
+          bootstrap:
+            servers: hdp-prod-aio-mi01.octosl.com:6667,hdp-prod-aio-mi02.octosl.com:6667,hdp-prod-aio-mi03.octosl.com:6667,hdp-prod-aio-mi04.octosl.com:6667,hdp-prod-aio-mi05.octosl.com:6667
+
+  quarkus:
+    log:
+      category:
+        "com.octotelematics.otp.preprocessor":
+          level: DEBUG
+    cache:
+      caffeine:
+        contract-enrichment-info:
+          expire-after-write: 30M
+
+  com:
+    octotelematics:
+      otp:
+        core:
+          services:
+            SubscriptionService/mp-rest/url: http://configuration-central-prd.i1-prd-configuration.svc.cluster.local:8080
+            SubscriptionService/byDevice/Retry/maxRetries: 2
+            SubscriptionService/byDevice/Retry/delay: 500
+            SubscriptionService/byDevice/Timeout: 20000
+        routing:
+          selectors:
+            - name: message-source-1-filter
+              default: ignore
+              routes:
+                - name: nebula-accept
+                  destination: enrich
+                  events:
+                    - CLEX:50:140
+                    - CLEX:50:143
+                    - CLEX:50:144
+                    - CLEX:50:146
+                    - CLEX:50:150
+                    - CLEX:50:153
+                    - CLEX:50:154
+                    - CLEX:50:156
+                    - CLEX:50:157
+                    - CLEX:50:160
+                    - CLEX:50:163
+                    - CLEX:50:171
+                    - CLEX:50:181
+                    - CLEX:50:183
+                    - CLEX:50:184
+                    - CLEX:50:186
+                    - CLEX:50:187
+                    - CLEX:50:190
+                - name: ngp-accept
+                  destination: enrich
+                  rules:
+                    - NGP
+            - name: message-source-2-filter
+            - name: packet-source-filter
+              default: enrich
+            - name: message-output-1-selector
+              attributes:
+                "transport.application-id": universal-processor-prd-clex-message
+              routes:
+                - name: discard-out
+                  destination: message.raw.clex.discard
+                  events:
+                    - CLEX
+                  rules:
+                    - DISCARD
+                - name: unknown-out
+                  destination: message.raw.clex.unknown
+                  events:
+                    - CLEX
+                  rules:
+                    - UNK
+                - name: privacy-out
+                  destination: message.raw.clex.privacy
+                  events:
+                    - CLEX
+                  rules:
+                    - PVC/TELEMATIC
+                    - PVC/RAWDATA
+                    - PVC/FULL
+                    - ^PVC/FREEZE/
+                - name: recover-out
+                  destination: message.raw.clex.platform
+                  events:
+                    - CLEX
+                  rules:
+                    - REVR
+                    - RECV
+                - name: park-out
+                  destination: message.raw.clex.park
+                  events:
+                    - CLEX
+                  rules:
+                    - PARK
+                - name: clex-connection-out
+                  destination: message.raw.clex.platform.connection
+                  events:
+                    - CLEX:4
+                - name: clex-out
+                  destination: message.raw.clex.platform
+                  events:
+                    - CLEX
+            - name: message-output-2-selector
+              attributes:
+                "transport.application-id": universal-processor-prd-clex-message
+            - name: message-output-3-selector
+              attributes:
+                "transport.application-id": universal-processor-prd-clex-message
+            - name: packet-output-selector
+              attributes:
+                "transport.application-id": universal-processor-prd-clex-message
+              default: avro.raw.clex.platform
+              routes:
+                - name: discard-out
+                  destination: avro.raw.clex.discard
+                  rules:
+                    - DISCARD
+                - name: unknown-out
+                  destination: avro.raw.clex.unknown
+                  rules:
+                    - UNK
+                - name: privacy-out
+                  destination: avro.raw.clex.privacy
+                  rules:
+                    - PVC/TELEMATIC
+                    - PVC/RAWDATA
+                    - PVC/FULL
+                    - ^PVC/FREEZE/
+                - name: recover-out
+                  destination: avro.raw.clex.platform
+                  rules:
+                    - REVR
+                    - RECV
+                - name: park-out
+                  destination: avro.raw.clex.park
+                  rules:
+                    - PARK
+                - name: device-mgmt
+                  destination: avro.raw.clex.dm
+                  events:
+                    - CLEX:50
